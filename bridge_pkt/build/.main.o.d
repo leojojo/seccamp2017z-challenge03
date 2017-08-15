@@ -149,4 +149,5 @@ dep_main.o = /home/dpdk/seccamp2017z-challenge03/bridge_pkt/main.c \
  /usr/share/dpdk/x86_64-default-linuxapp-gcc/include/generic/rte_byteorder.h \
  /usr/share/dpdk/x86_64-default-linuxapp-gcc/include/rte_byteorder_64.h \
  /usr/share/dpdk/x86_64-default-linuxapp-gcc/include/rte_eth_ctrl.h \
- /usr/share/dpdk/x86_64-default-linuxapp-gcc/include/rte_dev_info.h
+ /usr/share/dpdk/x86_64-default-linuxapp-gcc/include/rte_dev_info.h \
+ /usr/share/dpdk/x86_64-default-linuxapp-gcc/include/rte_hexdump.h

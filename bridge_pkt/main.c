@@ -66,6 +66,7 @@
 #include <rte_ethdev.h>
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
+#include <rte_hexdump.h>
 
 static volatile bool force_quit;
 
@@ -142,46 +143,62 @@ struct udp_hdr {
   uint16_t cksum;
 } __attribute__((__packed__));
 
+struct dns_hdr {
+  uint16_t id;
+  uint16_t flags;
+  uint16_t qdcount;
+  uint16_t ancount;
+  uint16_t nscount;
+  uint16_t arcount;
+} __attribute__((__packed__));
+
 bool
 isDNS(struct rte_mbuf *m)
 {
   struct eth_hdr *eth;
   struct ip4_hdr *ip;
   struct udp_hdr *udp;
+  struct dns_hdr *dns;
   bool drop;
+  char *query;
+
+  char slankdevnet[] = {
+    0x08,
+    's',
+    'l',
+    'a',
+    'n',
+    'k',
+    'd',
+    'e',
+    'v',
+    0x03,
+    'n',
+    'e',
+    't',
+    0x00
+  };
 
   eth = rte_pktmbuf_mtod(m, struct eth_hdr *);
-
-  /*
-  printf("[ethhdr]\n");
-  printf("  dst:%02x:%02x:%02x:%02x:%02x:%02x\n",
-    eth->dst[0], eth->dst[1], eth->dst[2], eth->dst[3], eth->dst[4], eth->dst[5]);
-  printf("  src:%02x:%02x:%02x:%02x:%02x:%02x\n",
-    eth->src[0], eth->src[1], eth->src[2], eth->src[3], eth->src[4], eth->src[5]);
-  printf("  type:%04x\n", rte_be_to_cpu_16(eth->type));
-  */
 
   if (rte_be_to_cpu_16(eth->type) != eth_ipv4)
     return false;
 
   ip = rte_pktmbuf_mtod_offset(m, struct ip4_hdr *, sizeof(*eth));
-
-  /*
-  printf("[iphdr]\n");
-  printf("  src:%u.%u.%u.%u\n",
-    ip->src[0], ip->src[1], ip->src[2], ip->src[3]);
-  printf("  dst:%u.%u.%u.%u\n",
-    ip->dst[0], ip->dst[1], ip->dst[2], ip->dst[3]);
-  printf("  proto:%u\n", ip->proto);
-  */
+  const size_t ip_hdr_len = (ip->version_ihl & 0x0f) * 4;
 
   //----------DROP DNS----------//
   if(ip->proto == 0x11){  // isUDP?
-    udp = rte_pktmbuf_mtod_offset(m, struct udp_hdr *, sizeof(*eth) + sizeof(*ip));
-    //printf("src:%d\ndst:%d\n", ntohs(udp->src_port), ntohs(udp->dst_port));
-    if(ntohs(udp->src_port) == 53 || ntohs(udp->dst_port) == 53 ){  // isDNS?
-      printf("drop dns\n");
-      return true;
+    udp = rte_pktmbuf_mtod_offset(m, struct udp_hdr *, sizeof(*eth) + ip_hdr_len);
+    if(ntohs(udp->dst_port) == 53){  // isDNS?
+      dns = rte_pktmbuf_mtod_offset(m, struct dns_hdr *, sizeof(*eth) + ip_hdr_len + sizeof(*udp));
+      //dns = (dns_hdr *)(udp+1);
+      query = rte_pktmbuf_mtod_offset(m, char*,
+          sizeof(*eth) + ip_hdr_len + sizeof(*udp) + sizeof(*dns));
+      if(ntohs(dns->qdcount)){
+        printf("drop dns\n");
+        return true;
+      }
     }
   }
   //----------DROP DNS----------//
@@ -212,9 +229,12 @@ bridge_main_loop(void)
       if(nb_rx == 0)continue;
       for(int i = 0; i < nb_rx; i++){
         if(isDNS(pkts_burst[i])){
+          uint8_t *ptr_pkt = rte_pktmbuf_mtod(pkts_burst[i], uint8_t*);
+          uint8_t pkt_len = pkts_burst[i]->pkt_len;
+          rte_hexdump(stdout, "query", ptr_pkt, pkt_len);
           rte_pktmbuf_free(pkts_burst[i]);
         }else{
-          printf("pass\n");
+          //printf("pass\n");
           rte_eth_tx_burst(rx_portid^1, 0, &pkts_burst[i], 1);
         }
       }
