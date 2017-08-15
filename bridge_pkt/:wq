@@ -143,7 +143,7 @@ struct udp_hdr {
 } __attribute__((__packed__));
 
 bool
-isDNS(struct rte_mbuf *m)
+drop_dns(struct rte_mbuf *m)
 {
   struct eth_hdr *eth;
   struct ip4_hdr *ip;
@@ -176,16 +176,16 @@ isDNS(struct rte_mbuf *m)
   */
 
   //----------DROP DNS----------//
-  if(ip->proto == 0x11){  // isUDP?
+  if(ip->proto != 0x11){  // isUDP?
     udp = rte_pktmbuf_mtod_offset(m, struct udp_hdr *, sizeof(*eth) + sizeof(*ip));
-    //printf("src:%d\ndst:%d\n", ntohs(udp->src_port), ntohs(udp->dst_port));
     if(ntohs(udp->src_port) == 53 || ntohs(udp->dst_port) == 53 ){  // isDNS?
       printf("drop dns\n");
-      return true;
+      return false;
     }
   }
   //----------DROP DNS----------//
-  return false;
+  printf("packet passed\n");
+  return true;
 }
 
 /* main processing loop */
@@ -211,11 +211,10 @@ bridge_main_loop(void)
       nb_rx = rte_eth_rx_burst(rx_portid, 0, pkts_burst, MAX_PKT_BURST);
       if(nb_rx == 0)continue;
       for(int i = 0; i < nb_rx; i++){
-        if(isDNS(pkts_burst[i])){
-          rte_pktmbuf_free(pkts_burst[i]);
-        }else{
-          printf("pass\n");
+        if(drop_dns(pkts_burst[i])){
           rte_eth_tx_burst(rx_portid^1, 0, &pkts_burst[i], 1);
+        }else{
+          rte_pktmbuf_free(pkts_burst[i]);
         }
       }
       ;

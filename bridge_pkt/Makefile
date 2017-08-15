@@ -34,9 +34,9 @@ RTE_TARGET = x86_64-default-linuxapp-gcc
 
 include $(RTE_SDK)/mk/rte.vars.mk
 
-all: receive_pkt
+all: $(APP)
 
-APP = receive_pkt
+APP = bridge_pkt
 SRCS-y := main.c
 
 include $(RTE_SDK)/mk/rte.extapp.mk
