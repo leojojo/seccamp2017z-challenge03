@@ -145,7 +145,7 @@ struct udp_hdr {
 
 struct dns_hdr {
   uint16_t id;
-  uint16_t flags;
+  uint16_t flags; // these structs are just to move the pointer forward...so no need to be exact
   uint16_t qdcount;
   uint16_t ancount;
   uint16_t nscount;
@@ -162,7 +162,7 @@ isDNS(struct rte_mbuf *m)
   bool drop;
   char *query;
 
-  char slankdevnet[] = {
+  char slankdevnet[] = {  // DNS query name field
     0x08,
     's',
     'l',
@@ -185,7 +185,8 @@ isDNS(struct rte_mbuf *m)
     return false;
 
   ip = rte_pktmbuf_mtod_offset(m, struct ip4_hdr *, sizeof(*eth));
-  const size_t ip_hdr_len = (ip->version_ihl & 0x0f) * 4;
+  const size_t ip_hdr_len = (ip->version_ihl & 0x0f) * 4; 
+  // ip_hdr has variable len of lowerByte of version field * 4 bytes (e.g. 0x45 AND 0x0f *4  = 0x05 *4 => 20 bytes)
 
   //----------DROP DNS----------//
   if(ip->proto == 0x11){  // isUDP?
@@ -195,7 +196,7 @@ isDNS(struct rte_mbuf *m)
       //dns = (dns_hdr *)(udp+1);
       query = rte_pktmbuf_mtod_offset(m, char*,
           sizeof(*eth) + ip_hdr_len + sizeof(*udp) + sizeof(*dns));
-      if(ntohs(dns->qdcount)){
+      if(ntohs(dns->qdcount)){  // if query exists
         printf("drop dns\n");
         return true;
       }
@@ -226,19 +227,18 @@ bridge_main_loop(void)
   while (!force_quit) {
     for (rx_portid = 0; rx_portid < MAX_ETHPORTS; rx_portid++) {
       nb_rx = rte_eth_rx_burst(rx_portid, 0, pkts_burst, MAX_PKT_BURST);
-      if(nb_rx == 0)continue;
+      if(nb_rx == 0)continue; // if any packets are captured
       for(int i = 0; i < nb_rx; i++){
         if(isDNS(pkts_burst[i])){
-          uint8_t *ptr_pkt = rte_pktmbuf_mtod(pkts_burst[i], uint8_t*);
+          uint8_t *ptr_pkt = rte_pktmbuf_mtod(pkts_burst[i], uint8_t*); // pointer to all of (dropped) packet
           uint8_t pkt_len = pkts_burst[i]->pkt_len;
           rte_hexdump(stdout, "query", ptr_pkt, pkt_len);
-          rte_pktmbuf_free(pkts_burst[i]);
+          rte_pktmbuf_free(pkts_burst[i]);  // free when captured packet will not be sent
         }else{
           //printf("pass\n");
-          rte_eth_tx_burst(rx_portid^1, 0, &pkts_burst[i], 1);
+          rte_eth_tx_burst(rx_portid^1, 0, &pkts_burst[i], 1);  // bridge to ^1 = the other NIC
         }
       }
-      ;
     }
   }
 
